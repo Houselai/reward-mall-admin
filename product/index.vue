@@ -4,6 +4,7 @@ import { NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns, FormInst, FormRules, UploadCustomRequestOptions } from 'naive-ui'
 import { createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct, uploadProductImage } from '../api/product'
 import type { Product, ProductCreate, ProductForm, ProductOption, ProductEnumOption, ProductQuery } from '../api/product'
+import CatalogTransfer from '../components/CatalogTransfer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -317,6 +318,7 @@ onMounted(() => { loadOptions(); loadList() })
     <n-card title="商品管理" class="shadow-sm rounded-5px mt-5px">
       <template #header-extra>
         <n-space>
+          <CatalogTransfer module="product" @imported="loadList" />
           <n-button :loading="loading" @click="loadList">
             刷新
           </n-button>

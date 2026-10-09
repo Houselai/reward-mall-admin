@@ -6,6 +6,7 @@ import { componentType } from '@/components/business/QueryForm/types'
 import type { FormItemsProps } from '@/components/business/QueryForm/types'
 import { createCategory, deleteCategory, fetchCategoryDetail, fetchCategoryFilterOptions, fetchCategoryList, fetchCategoryOptions, updateCategory, uploadCategoryImage } from '../api/category'
 import type { Category, CategoryForm, CategoryOption, CategoryQuery } from '../api/category'
+import CatalogTransfer from '../components/CatalogTransfer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -356,6 +357,7 @@ const columns: DataTableColumns<Category> = [
     <n-card title="分类管理" class="shadow-sm rounded-5px mt-5px">
       <template #header-extra>
         <n-space>
+          <CatalogTransfer module="category" @imported="refreshList" />
           <n-button :loading="loading || filterOptionsLoading" @click="refreshList">
             刷新
           </n-button>

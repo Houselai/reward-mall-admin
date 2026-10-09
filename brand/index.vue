@@ -6,6 +6,7 @@ import { componentType } from '@/components/business/QueryForm/types'
 import type { FormItemsProps } from '@/components/business/QueryForm/types'
 import { createBrand, deleteBrand, fetchBrandDetail, fetchBrandList, updateBrand, uploadBrandImage } from '../api/brand'
 import type { Brand, BrandForm } from '../api/brand'
+import CatalogTransfer from '../components/CatalogTransfer.vue'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -247,6 +248,7 @@ const columns: DataTableColumns<Brand> = [
     <n-card title="品牌管理" class="shadow-sm rounded-5px mt-5px">
       <template #header-extra>
         <n-space>
+          <CatalogTransfer module="brand" @imported="loadList" />
           <n-button :loading="loading" @click="loadList">
             刷新
           </n-button>

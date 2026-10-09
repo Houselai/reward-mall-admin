@@ -58,6 +58,12 @@
 
 `api/appletConfig.ts`、`appletConfig/index.vue` 对接 `/admin/applet_config/list.json` 与 `/admin/applet_config/save.json`。按接口顺序、名称、说明及类型动态生成表单，展示默认值，支持字符串、整数、布尔开关、有序字符串数组及 `pic` 图片。图片通过 `/admin/tool/upload.json` 上传至 `applet_config` 目录，使用返回的 `url` 作为配置值，支持预览、更换及清空；上传后需保存配置，上传期间禁止保存或重新加载，上传失败保留原值。仅保存修改项的 `key`、`value`，保留空字符串、0、false 和空数组，不提供配置定义的新增或删除。保存失败保留编辑内容，重新加载未保存的修改前提示确认。
 
+## 商品、分类、品牌导入导出
+
+三个管理页面均提供“导入”和“导出全部”。共用 `api/catalogTransfer.ts` 和 `components/CatalogTransfer.vue`，分别调用 `/admin/{product|category|brand}/import.json`、`export.json`。
+
+导出不提交列表筛选和分页条件，包含全部未删除的启用及禁用数据；成功后展示数量和 OSS 下载链接，导出文件同时作为导入模板。导入通过 multipart 的 `file` 字段提交 XLSX，前端检查扩展名、非空及 10 MiB 上限，其余结构和业务校验交由服务端。弹窗说明完整行更新、空文本清空及原子导入语义；成功展示总数、新增、更新、未变化数量并刷新列表，分类同步刷新筛选选项；失败保留文件并按 Excel 行号、列名、字段及原因展示服务端错误。请求层仅在本次导入中保留错误明细，沿用统一鉴权和错误提示。
+
 ## 主项目接入
 
 配置 Vite 与 TypeScript 的 `giftMall-package` 别名，在主项目路由类型中合并 `GiftMallRoute.RouteKey`，并在动态路由初始化时追加 `giftMallRoute`。权限接入与点读相同：当前点读未配置权限编号，而是登录后直接追加模块菜单。
