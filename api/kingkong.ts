@@ -1,6 +1,6 @@
 import { giftMallRequest } from '../config/request'
 
-export type KingkongRedirectType = '1' | '2' | '3'
+export type KingkongRedirectType = '0' | '1' | '2' | '3'
 
 export interface KingkongItem {
   position: number

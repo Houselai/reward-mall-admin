@@ -73,6 +73,7 @@ const detail = ref<Banner | null>(null)
 const form = reactive<BannerForm>({ image_url: '', redirect_type: '1', redirect_value: '', sort: 0, status: '1' })
 const statusOptions = [{ label: '启用', value: '1' }, { label: '禁用', value: '0' }]
 const redirectOptions = [
+  { label: '无动作', value: '0' },
   { label: 'H5', value: '1' },
   { label: '二级页', value: '2' },
   { label: '弹窗', value: '3' },
@@ -87,7 +88,7 @@ const rules: FormRules = {
     trigger: ['change', 'blur'],
   },
   status: { required: true, message: '请选择状态', trigger: 'change' },
-  redirect_type: { required: true, type: 'enum', enum: ['1', '2', '3'], message: '请选择跳转类型', trigger: 'change' },
+  redirect_type: { required: true, type: 'enum', enum: ['0', '1', '2', '3'], message: '请选择跳转类型', trigger: 'change' },
   redirect_value: { required: true, whitespace: true, max: 512, message: '请输入跳转值或上传弹窗图片，最多512字', trigger: ['input', 'blur'] },
 }
 
@@ -137,7 +138,11 @@ async function saveBanner() {
     return
   saving.value = true
   try {
-    const params: BannerForm = { ...form, image_url: form.image_url.trim(), redirect_value: form.redirect_value.trim() }
+    const params: BannerForm = {
+      ...form,
+      image_url: form.image_url.trim(),
+      redirect_value: form.redirect_type === '0' ? '' : form.redirect_value.trim(),
+    }
     const res = mode.value === 'create'
       ? await createBanner(params)
       : await updateBanner({ ...params, id: editId.value! })
@@ -284,7 +289,7 @@ onMounted(loadList)
         <n-form-item label="跳转类型" path="redirect_type">
           <n-select v-model:value="form.redirect_type" :options="redirectOptions" @update:value="form.redirect_value = ''" />
         </n-form-item>
-        <n-form-item label="跳转值" path="redirect_value">
+        <n-form-item v-if="form.redirect_type !== '0'" label="跳转值" path="redirect_value">
           <div v-if="form.redirect_type === '3'" class="w-full">
             <n-upload v-if="!readonly" :custom-request="(options) => uploadImage(options, 'redirect_value')" :show-file-list="false" accept="image/*" :disabled="saving || uploading">
               <n-button :loading="uploading" :disabled="saving || uploading">

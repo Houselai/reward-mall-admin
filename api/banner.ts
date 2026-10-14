@@ -1,6 +1,6 @@
 import { giftMallRequest } from '../config/request'
 
-export type BannerRedirectType = '1' | '2' | '3'
+export type BannerRedirectType = '0' | '1' | '2' | '3'
 
 export interface Banner {
   id: number

@@ -18,6 +18,7 @@ const busy = computed(() => loading.value || saving.value || uploadingPosition.v
 const snapshot = ref('')
 const dirty = computed(() => loaded.value && JSON.stringify(form.items) !== snapshot.value)
 const redirectOptions = [
+  { label: '无动作', value: '0' },
   { label: 'H5', value: '1' },
   { label: '二级页', value: '2' },
   { label: '弹窗', value: '3' },
@@ -25,7 +26,7 @@ const redirectOptions = [
 const rules: FormRules = {
   name: { required: true, whitespace: true, max: 100, message: '请输入名称，最多100字', trigger: ['input', 'blur'] },
   image_url: { required: true, whitespace: true, max: 512, message: '请上传图标或填写 URL / OSS key，最多512字', trigger: ['input', 'blur'] },
-  redirect_type: { required: true, type: 'enum', enum: ['1', '2', '3'], message: '请选择跳转类型', trigger: 'change' },
+  redirect_type: { required: true, type: 'enum', enum: ['0', '1', '2', '3'], message: '请选择跳转类型', trigger: 'change' },
   redirect_value: { required: true, whitespace: true, max: 512, message: '请输入跳转值或上传弹窗图片，最多512字', trigger: ['input', 'blur'] },
 }
 
@@ -89,7 +90,7 @@ async function handleSave() {
       name: item.name.trim(),
       image_url: item.image_url.trim(),
       redirect_type: item.redirect_type!,
-      redirect_value: item.redirect_value.trim(),
+      redirect_value: item.redirect_type === '0' ? '' : item.redirect_value.trim(),
     }))
     const { error } = await saveKingkong(items)
     if (error)
@@ -145,7 +146,7 @@ onMounted(loadConfig)
         </n-space>
       </template>
       <n-alert type="info" class="mb-15px">
-        金刚区固定为4个位置，按位置顺序展示。每次保存全部四项，名称、图标、跳转类型和跳转值均必填。
+        金刚区固定为4个位置，按位置顺序展示。每次保存全部四项，名称、图标、跳转类型必填；选择“无动作”时无需填写跳转值。
       </n-alert>
       <n-alert v-if="loadError" type="error" class="mb-15px">
         配置加载失败，请重新加载。已有页面数据会保留。
@@ -174,7 +175,7 @@ onMounted(loadConfig)
               <n-form-item label="跳转类型" :path="`items.${index}.redirect_type`" :rule="rules.redirect_type">
                 <n-select v-model:value="item.redirect_type" :options="redirectOptions" placeholder="请选择跳转类型" @update:value="item.redirect_value = ''" />
               </n-form-item>
-              <n-form-item label="跳转值" :path="`items.${index}.redirect_value`" :rule="rules.redirect_value">
+              <n-form-item v-if="item.redirect_type !== '0'" label="跳转值" :path="`items.${index}.redirect_value`" :rule="rules.redirect_value">
                 <div v-if="item.redirect_type === '3'" class="w-full">
                   <n-upload
                     :custom-request="(options) => uploadImage(item, options, 'redirect_value')" :show-file-list="false"
