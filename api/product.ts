@@ -8,18 +8,17 @@ export interface ProductForm {
   exchange_description: string
   banks: string[]
   exchange_rules: string
-  category_id: number | null
+  category_ids: number[]
   brand_id: number | null
   sort: number
   status: '0' | '1'
   remark: string
 }
 
-export interface Product extends ProductForm {
+export interface Product extends Omit<ProductForm, 'category_ids'> {
   id: number
-  category_id: number
+  categories: { id: number; name: string; parent_id: number; parent_name: string }[]
   brand_id: number
-  category_name?: string
   brand_name?: string
   create_time: string
   modify_time: string
@@ -45,7 +44,7 @@ export interface ProductEnumOption {
   label: string
 }
 
-export type ProductCreate = ProductForm & { category_id: number; brand_id: number }
+export type ProductCreate = ProductForm & { brand_id: number }
 const jsonConfig = { headers: { 'Content-Type': 'application/json' } }
 
 export function fetchProductList(params: ProductQuery) {

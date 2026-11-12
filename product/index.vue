@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
-import type { DataTableColumns, FormInst, FormRules, UploadCustomRequestOptions } from 'naive-ui'
+import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
 import { autoSortProducts, createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct, uploadProductImage } from '../api/product'
 import type { Product, ProductCreate, ProductForm, ProductOption, ProductEnumOption, ProductQuery } from '../api/product'
 import CatalogTransfer from '../components/CatalogTransfer.vue'
@@ -99,13 +99,14 @@ const modalTitle = computed(() => ({ create: '新增商品', edit: '编辑商品
 const readonly = computed(() => mode.value === 'detail')
 const saving = ref(false)
 const uploading = ref(false)
+const imageInput = ref<HTMLInputElement | null>(null)
 const detailLoadingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const formRef = ref<FormInst | null>(null)
 const editId = ref<number | null>(null)
 const detail = ref<Product | null>(null)
 function emptyForm(): ProductForm {
-  return { images: [''], title: '', introduction: '', card_count: 1, exchange_description: '', banks: [], exchange_rules: '', category_id: null, brand_id: null, sort: 0, status: '1', remark: '' }
+  return { images: [''], title: '', introduction: '', card_count: 1, exchange_description: '', banks: [], exchange_rules: '', category_ids: [], brand_id: null, sort: 0, status: '1', remark: '' }
 }
 const form = reactive<ProductForm>(emptyForm())
 const busy = computed(() => saving.value || uploading.value)
@@ -115,7 +116,13 @@ function referenceOptions(options: ProductOption[], value: number | null) {
     : options
 }
 const editBrands = computed(() => referenceOptions(brandOptions.value, detail.value?.brand_id ?? null))
-const editCategories = computed(() => referenceOptions(categoryOptions.value, detail.value?.category_id ?? null))
+function categoryLabel(category: Product['categories'][number]) {
+  return `${category.parent_name} / ${category.name}`
+}
+function unavailableCategory(value: number | string) {
+  const category = detail.value?.categories.find(item => item.id === value)
+  return { value, label: `${category ? categoryLabel(category) : value}（当前不可选）` }
+}
 const uintRule = { required: true, type: 'number' as const, validator: (_rule: unknown, value: number) => Number.isInteger(value) && value >= 0 && value <= 4294967295, message: '请输入0至4294967295之间的整数', trigger: ['change', 'blur'] }
 const rules: FormRules = {
   title: { required: true, whitespace: true, max: 100, message: '请输入商品标题，最多100字', trigger: ['input', 'blur'] },
@@ -127,7 +134,11 @@ const rules: FormRules = {
   exchange_rules: { required: true, whitespace: true, max: 10000, message: '请输入兑换规则，最多10000字', trigger: ['input', 'blur'] },
   exchange_description: { max: 12, message: '兑换描述最多12个字符', trigger: ['input', 'blur'] },
   remark: { max: 128, message: '备注最多128字', trigger: ['input', 'blur'] },
-  category_id: { required: true, type: 'number', validator: (_rule, value: number) => Number.isSafeInteger(value) && value > 0 && (categoryOptions.value.some(item => item.value === value) || (mode.value === 'edit' && detail.value?.category_id === value)), message: '请选择启用的二级分类', trigger: 'change' },
+  category_ids: {
+    validator: (_rule, ids: number[]) => ids.length > 0 && new Set(ids).size === ids.length && ids.every(id => categoryOptions.value.some(option => option.value === id)),
+    message: '请至少选择一个二级分类，所选分类均须启用',
+    trigger: 'change',
+  },
   brand_id: { required: true, type: 'number', validator: (_rule, value: number) => Number.isSafeInteger(value) && value > 0 && (brandOptions.value.some(item => item.value === value) || (mode.value === 'edit' && detail.value?.brand_id === value)), message: '请选择启用品牌', trigger: 'change' },
   status: { required: true, type: 'enum', enum: ['0', '1'], message: '请选择状态', trigger: 'change' },
 }
@@ -161,7 +172,7 @@ async function openProduct(row: Product, targetMode: 'edit' | 'detail') {
       // 接口可能返回数字字符串，数字输入框要求 number。
       card_count: Number(data.card_count),
       exchange_description: data.exchange_description, banks: [...data.banks],
-      exchange_rules: data.exchange_rules, category_id: data.category_id,
+      exchange_rules: data.exchange_rules, category_ids: data.categories.map(category => category.id),
       brand_id: data.brand_id, sort: Number(data.sort), status: data.status, remark: data.remark,
     })
     formRef.value?.restoreValidation()
@@ -185,10 +196,11 @@ async function saveProduct() {
     return
   saving.value = true
   try {
-    const params: ProductCreate = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()), banks: [...form.banks], category_id: form.category_id!, brand_id: form.brand_id! }
+    const params: ProductCreate = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()), banks: [...form.banks], category_ids: [...form.category_ids], brand_id: form.brand_id! }
     const patch: Partial<ProductCreate> & { id: number } = { ...params, id: editId.value! }
-    // 仅在关联或状态变化时提交，避免触发未修改关联的重新校验。
-    if (params.category_id === detail.value?.category_id) delete patch.category_id
+    const previousIds = new Set(detail.value?.categories.map(category => category.id))
+    if (previousIds.size === params.category_ids.length && params.category_ids.every(id => previousIds.has(id)))
+      delete patch.category_ids
     if (params.brand_id === detail.value?.brand_id) delete patch.brand_id
     if (params.status === detail.value?.status) delete patch.status
     const res = mode.value === 'create' ? await createProduct(params) : await updateProduct(patch)
@@ -249,28 +261,36 @@ function confirmDelete(row: Product) {
   })
 }
 
-async function uploadImage({ file, onFinish, onError }: UploadCustomRequestOptions) {
-  if (!file.file || busy.value || readonly.value) {
-    onError()
+async function uploadImages(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files ?? [])
+  input.value = ''
+  if (!files.length || busy.value || readonly.value)
     return
-  }
+
   uploading.value = true
+  let uploaded = 0
   try {
-    const { error, data } = await uploadProductImage(file.file)
-    if (error || !data) {
-      onError()
-      return
+    for (const file of files) {
+      try {
+        const { error, data } = await uploadProductImage(file)
+        if (error || !data)
+          continue
+        const emptyIndex = form.images.findIndex(item => !item.trim())
+        if (emptyIndex >= 0)
+          form.images[emptyIndex] = data.url
+        else
+          form.images.push(data.url)
+        uploaded++
+      }
+      catch {
+        continue
+      }
     }
-    const emptyIndex = form.images.findIndex(item => !item.trim())
-    if (emptyIndex >= 0)
-      form.images[emptyIndex] = data.url
+    if (uploaded === files.length)
+      message.success('上传成功')
     else
-      form.images.push(data.url)
-    onFinish()
-    message.success('上传成功')
-  }
-  catch {
-    onError()
+      message.error(`已上传 ${uploaded} 张，${files.length - uploaded} 张上传失败`)
   }
   finally {
     uploading.value = false
@@ -292,7 +312,7 @@ const columns: DataTableColumns<Product> = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '商品标题', key: 'title', width: 220 },
   { title: '首图', key: 'images', width: 100, render: row => /^https?:\/\//i.test(row.images[0]) ? h(NImage, { src: row.images[0], width: 60, height: 60, objectFit: 'contain' }) : row.images[0] },
-  { title: '分类', key: 'category_name', width: 150 },
+  { title: '分类', key: 'categories', width: 200, render: row => row.categories.map(categoryLabel).join('、') || '—' },
   { title: '品牌', key: 'brand_name', width: 150 },
   { title: '排序', key: 'sort', width: 90 },
   { title: '状态', key: 'status', width: 90, render: row => h(NTag, { type: row.status === '1' ? 'success' : 'default' }, { default: () => row.status === '1' ? '启用' : '禁用' }) },
@@ -397,11 +417,10 @@ onMounted(() => { loadOptions(); loadList() })
               <n-button :disabled="busy" @click="form.images.push('')">
                 添加图片地址
               </n-button>
-              <n-upload :custom-request="uploadImage" :show-file-list="false" accept="image/*" :disabled="busy">
-                <n-button :loading="uploading" :disabled="busy">
-                  上传图片
-                </n-button>
-              </n-upload>
+              <input ref="imageInput" type="file" accept="image/*" multiple hidden @change="uploadImages">
+              <n-button :loading="uploading" :disabled="busy" @click="imageInput?.click()">
+                上传图片
+              </n-button>
             </n-space>
           </div>
         </n-form-item>
@@ -414,8 +433,9 @@ onMounted(() => { loadOptions(); loadList() })
         <n-form-item label="适用银行" path="banks">
           <n-select v-model:value="form.banks" :options="enumOptions.bank" multiple />
         </n-form-item>
-        <n-form-item label="二级分类" path="category_id" required>
-          <n-select v-model:value="form.category_id" :options="editCategories" filterable placeholder="请选择启用的二级分类" />
+        <n-form-item label="二级分类" path="category_ids" required>
+          <span v-if="readonly">{{ detail?.categories.map(categoryLabel).join('、') || '—' }}</span>
+          <n-select v-else v-model:value="form.category_ids" :options="categoryOptions" :fallback-option="unavailableCategory" multiple filterable placeholder="请选择一个或多个二级分类" />
         </n-form-item>
         <n-form-item label="品牌" path="brand_id" required>
           <n-select v-model:value="form.brand_id" :options="editBrands" filterable placeholder="请选择启用品牌" />
