@@ -68,6 +68,10 @@ export function deleteProduct(id: number) {
   return giftMallRequest.post<[]>('/admin/product/delete.json', { id }, jsonConfig)
 }
 
+export function autoSortProducts() {
+  return giftMallRequest.post<{ matched_count: number; unmatched_count: number; updated_count: number }>('/admin/product/auto_sort.json', undefined, jsonConfig)
+}
+
 export function fetchProductBrands() {
   return giftMallRequest.post<{ list: ProductOption[] }>('/admin/brand/options.json', undefined, jsonConfig)
 }

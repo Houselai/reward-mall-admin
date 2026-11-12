@@ -36,6 +36,15 @@ export const giftMallRoute: AuthRoute.Route = {
       },
     },
     {
+      name: 'giftMall_keqiOrder',
+      path: '/giftMall/keqiOrder',
+      component: 'self',
+      meta: {
+        title: '科启订单',
+        icon: 'mdi:clipboard-list-outline',
+      },
+    },
+    {
       name: 'giftMall_category',
       path: '/giftMall/category',
       component: 'self',

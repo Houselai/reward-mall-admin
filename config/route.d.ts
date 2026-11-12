@@ -7,5 +7,6 @@ declare namespace GiftMallRoute {
     | 'giftMall_category' // 分类管理
     | 'giftMall_kingkong' // 金刚区管理
     | 'giftMall_homeCategory' // 首页栏目配置
+    | 'giftMall_keqiOrder' // 科启订单
     | 'giftMall_product' // 商品管理
 }

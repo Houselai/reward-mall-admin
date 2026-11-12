@@ -2,7 +2,7 @@
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns, FormInst, FormRules, UploadCustomRequestOptions } from 'naive-ui'
-import { createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct, uploadProductImage } from '../api/product'
+import { autoSortProducts, createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct, uploadProductImage } from '../api/product'
 import type { Product, ProductCreate, ProductForm, ProductOption, ProductEnumOption, ProductQuery } from '../api/product'
 import CatalogTransfer from '../components/CatalogTransfer.vue'
 
@@ -11,6 +11,7 @@ const dialog = useDialog()
 const rows = ref<Product[]>([])
 const rowKey = (row: Product) => row.id
 const loading = ref(false)
+const sorting = ref(false)
 const listError = ref(false)
 const query = reactive<{ title: string; category_id: number | null; brand_id: number | null; status: '0' | '1' | null }>({ title: '', category_id: null, brand_id: null, status: null })
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
@@ -202,6 +203,30 @@ async function saveProduct() {
   }
 }
 
+function confirmAutoSort() {
+  dialog.warning({
+    title: '一键重排商品',
+    content: '将对全部未删除商品按兑换描述中的卡数、差价升序排列，未匹配的商品排在末尾。确定重排吗？',
+    positiveText: '重排',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      if (sorting.value)
+        return false
+      sorting.value = true
+      try {
+        const { error, data } = await autoSortProducts()
+        if (error || !data)
+          return false
+        message.success(`重排完成：匹配 ${data.matched_count} 件，未匹配 ${data.unmatched_count} 件，排序已更新 ${data.updated_count} 件`)
+        await loadList()
+      }
+      finally {
+        sorting.value = false
+      }
+    },
+  })
+}
+
 function confirmDelete(row: Product) {
   dialog.warning({
     title: '删除商品',
@@ -319,6 +344,9 @@ onMounted(() => { loadOptions(); loadList() })
       <template #header-extra>
         <n-space>
           <CatalogTransfer module="product" @imported="loadList" />
+          <n-button :loading="sorting" @click="confirmAutoSort">
+            一键重排商品
+          </n-button>
           <n-button :loading="loading" @click="loadList">
             刷新
           </n-button>
