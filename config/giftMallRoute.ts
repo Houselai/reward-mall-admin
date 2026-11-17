@@ -45,6 +45,15 @@ export const giftMallRoute: AuthRoute.Route = {
       },
     },
     {
+      name: 'giftMall_otherOrder',
+      path: '/giftMall/otherOrder',
+      component: 'self',
+      meta: {
+        title: '其他订单',
+        icon: 'mdi:clipboard-text-outline',
+      },
+    },
+    {
       name: 'giftMall_category',
       path: '/giftMall/category',
       component: 'self',
