@@ -128,6 +128,7 @@ async function handleExport() {
         </div>
         <div v-if="module === 'product'">
           请使用最新模板，在「一级分类列表」和「二级分类列表」两个单元格内逐行配对填写，至少一对。导入会替换该商品的全部分类。
+          支持银行在小程序配置中统一维护，模板不再包含「可办银行」列，旧模板请重新导出。
         </div>
       </n-alert>
       <input ref="fileInput" type="file" accept=".xlsx" :disabled="importing" class="mb-15px" @change="selectFile">

@@ -17,7 +17,7 @@ const query = reactive<{ title: string; category_id: number | null; brand_id: nu
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
 const brandOptions = ref<ProductOption[]>([])
 const categoryOptions = ref<ProductOption[]>([])
-const enumOptions = reactive<{ status: ProductEnumOption[]; bank: ProductEnumOption[] }>({ status: [], bank: [] })
+const enumOptions = reactive<{ status: ProductEnumOption[] }>({ status: [] })
 const optionsLoading = ref(false)
 const optionsError = ref(false)
 let activeQuery: Omit<ProductQuery, 'page' | 'step'> = {}
@@ -106,7 +106,7 @@ const formRef = ref<FormInst | null>(null)
 const editId = ref<number | null>(null)
 const detail = ref<Product | null>(null)
 function emptyForm(): ProductForm {
-  return { images: [''], title: '', introduction: '', card_count: 1, exchange_description: '', banks: [], exchange_rules: '', category_ids: [], brand_id: null, sort: 0, status: '1', remark: '' }
+  return { images: [''], title: '', introduction: '', card_count: 1, exchange_description: '', exchange_rules: '', category_ids: [], brand_id: null, sort: 0, status: '1', remark: '' }
 }
 const form = reactive<ProductForm>(emptyForm())
 const busy = computed(() => saving.value || uploading.value)
@@ -129,8 +129,7 @@ const rules: FormRules = {
   introduction: { required: true, whitespace: true, max: 500, message: '请输入商品介绍，最多500字', trigger: ['input', 'blur'] },
   images: { validator: (_rule, value: string[]) => value.length > 0 && value.every(item => !!item.trim() && item.length <= 512), message: '至少填写一张图片，每项非空且最多512字', trigger: 'change' },
   sort: uintRule,
-  card_count: { ...uintRule, validator: (_rule, value: number) => Number.isInteger(value) && value >= 1 && value <= 4294967295, message: '卡数量必须为1至4294967295之间的整数' },
-  banks: { validator: (_rule, value: string[]) => value.length > 0 && new Set(value).size === value.length && value.every(bank => enumOptions.bank.some(item => item.value === bank)), message: '请至少选择一家银行', trigger: 'change' },
+  card_count: uintRule,
   exchange_rules: { required: true, whitespace: true, max: 10000, message: '请输入兑换规则，最多10000字', trigger: ['input', 'blur'] },
   exchange_description: { max: 12, message: '兑换描述最多12个字符', trigger: ['input', 'blur'] },
   remark: { max: 128, message: '备注最多128字', trigger: ['input', 'blur'] },
@@ -171,7 +170,7 @@ async function openProduct(row: Product, targetMode: 'edit' | 'detail') {
       images: [...data.images], title: data.title, introduction: data.introduction,
       // 接口可能返回数字字符串，数字输入框要求 number。
       card_count: Number(data.card_count),
-      exchange_description: data.exchange_description, banks: [...data.banks],
+      exchange_description: data.exchange_description,
       exchange_rules: data.exchange_rules, category_ids: data.categories.map(category => category.id),
       brand_id: data.brand_id, sort: Number(data.sort), status: data.status, remark: data.remark,
     })
@@ -196,7 +195,7 @@ async function saveProduct() {
     return
   saving.value = true
   try {
-    const params: ProductCreate = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()), banks: [...form.banks], category_ids: [...form.category_ids], brand_id: form.brand_id! }
+    const params: ProductCreate = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()), category_ids: [...form.category_ids], brand_id: form.brand_id! }
     const patch: Partial<ProductCreate> & { id: number } = { ...params, id: editId.value! }
     const previousIds = new Set(detail.value?.categories.map(category => category.id))
     if (previousIds.size === params.category_ids.length && params.category_ids.every(id => previousIds.has(id)))
@@ -425,13 +424,10 @@ onMounted(() => { loadOptions(); loadList() })
           </div>
         </n-form-item>
         <n-form-item label="卡数量" path="card_count">
-          <n-input-number v-model:value="form.card_count" :min="1" :max="4294967295" :precision="0" />
+          <n-input-number v-model:value="form.card_count" :min="0" :max="4294967295" :precision="0" />
         </n-form-item>
         <n-form-item label="兑换描述" path="exchange_description">
           <n-input v-model:value="form.exchange_description" :maxlength="12" show-count />
-        </n-form-item>
-        <n-form-item label="适用银行" path="banks">
-          <n-select v-model:value="form.banks" :options="enumOptions.bank" multiple />
         </n-form-item>
         <n-form-item label="二级分类" path="category_ids" required>
           <span v-if="readonly">{{ detail?.categories.map(categoryLabel).join('、') || '—' }}</span>

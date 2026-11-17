@@ -6,7 +6,6 @@ export interface ProductForm {
   introduction: string
   card_count: number
   exchange_description: string
-  banks: string[]
   exchange_rules: string
   category_ids: number[]
   brand_id: number | null
@@ -80,7 +79,7 @@ export function fetchProductCategories() {
 }
 
 export function fetchProductEnums() {
-  return giftMallRequest.post<{ status: ProductEnumOption[]; bank: ProductEnumOption[] }>('/admin/enum/list.json', { keys: ['status', 'bank'] }, jsonConfig)
+  return giftMallRequest.post<{ status: ProductEnumOption[] }>('/admin/enum/list.json', { keys: ['status'] }, jsonConfig)
 }
 
 export function uploadProductImage(img: File) {
