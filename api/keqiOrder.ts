@@ -1,4 +1,5 @@
 import { giftMallRequest } from '../config/request'
+import type { CatalogExport } from './catalogTransfer'
 
 export type OrderDateField = 'applied_date' | 'heka_time' | 'jihuo_time' | 'shoushua_time' | 'settlement_time'
 
@@ -7,6 +8,7 @@ export interface KeqiOrderFilters {
   product_id?: number
   product_name?: string
   order_status?: string
+  is_qualified?: '0' | '1'
   applicant_name?: string
   mobile_last4?: string
   applicant_id_card_last4?: string
@@ -25,10 +27,8 @@ export interface KeqiOrder extends Record<OrderDateField, string | null> {
   applicant_name: string | null
   applicant_mobile: string | null
   applicant_id_card_last4: string | null
-  heka_reward_fen: number | null
-  jihuo_reward_fen: number | null
-  shoushua_reward_fen: number | null
-  settlement_rule: string | null
+  is_qualified: '0' | '1'
+  qualified_time: string | null
   modify_time: string
 }
 
@@ -40,4 +40,8 @@ export function fetchKeqiOrders(params: KeqiOrderFilters & { page: number; step:
 
 export function fetchKeqiOrderStatuses() {
   return giftMallRequest.post<{ keqi_order_status: { label: string; value: string }[] }>('/admin/enum/list.json', { keys: ['keqi_order_status'] }, jsonConfig)
+}
+
+export function exportKeqiOrders(params: KeqiOrderFilters) {
+  return giftMallRequest.post<CatalogExport>('/admin/keqi_order/export.json', params, jsonConfig)
 }

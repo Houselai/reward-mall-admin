@@ -2,8 +2,9 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useMessage } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { fetchKeqiOrders, fetchKeqiOrderStatuses } from '../api/keqiOrder'
+import { exportKeqiOrders, fetchKeqiOrders, fetchKeqiOrderStatuses } from '../api/keqiOrder'
 import type { KeqiOrder, KeqiOrderFilters, OrderDateField } from '../api/keqiOrder'
+import type { CatalogExport } from '../api/catalogTransfer'
 
 const message = useMessage()
 const dateFields: { label: string; value: OrderDateField }[] = [
@@ -25,6 +26,7 @@ function initialForm() {
   return {
     order_sn: '', product_name: '', applicant_name: '', mobile_last4: '', applicant_id_card_last4: '',
     product_id: null as number | null, order_status: null as string | null,
+    is_qualified: null as KeqiOrderFilters['is_qualified'] | null,
     date_field: dateFields[0].value, date_from: null as string | null, date_to: null as string | null,
   }
 }
@@ -35,6 +37,9 @@ const rows = ref<KeqiOrder[]>([])
 const statuses = ref<{ label: string; value: string }[]>([])
 const statusError = ref(false)
 const loading = ref(false)
+const exporting = ref(false)
+const exported = ref<CatalogExport | null>(null)
+const showExport = ref(false)
 const listError = ref(false)
 const pagination = reactive({
   page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100],
@@ -98,6 +103,8 @@ function search() {
     query.product_id = form.product_id
   if (form.order_status)
     query.order_status = form.order_status
+  if (form.is_qualified !== null)
+    query.is_qualified = form.is_qualified
   if (form.date_from || form.date_to)
     query.date_field = form.date_field
   if (form.date_from)
@@ -106,6 +113,26 @@ function search() {
     query.date_to = form.date_to
   filters = query
   changePage(1)
+}
+
+async function handleExport() {
+  if (exporting.value)
+    return
+  exporting.value = true
+  exported.value = null
+  try {
+    const { error, data } = await exportKeqiOrders({ ...filters })
+    if (error || !data)
+      return
+    exported.value = data
+    showExport.value = true
+  }
+  catch {
+    message.error('导出失败，请重试')
+  }
+  finally {
+    exporting.value = false
+  }
 }
 
 function reset() {
@@ -123,23 +150,17 @@ function changePageSize(size: number) {
   changePage(1)
 }
 
-function reward(fen: number | null) {
-  return fen === null ? '—' : (fen / 100).toFixed(2)
-}
-
 const columns: DataTableColumns<KeqiOrder> = [
   { title: '订单号', key: 'order_sn', width: 200, ellipsis: { tooltip: true } },
   { title: '订单状态', key: 'order_status_text', width: 100 },
+  { title: '是否达标', key: 'is_qualified', width: 100, render: row => row.is_qualified === '1' ? '已达标' : '未达标' },
   { title: '申请人姓名', key: 'applicant_name', width: 120 },
   { title: '申请人手机号', key: 'applicant_mobile', width: 140 },
   { title: '身份证后四位', key: 'applicant_id_card_last4', width: 120 },
   { title: '产品名称', key: 'product_name', width: 200, ellipsis: { tooltip: true } },
   { title: '产品 ID', key: 'product_id', width: 100 },
   ...dateFields.map(({ label, value }) => ({ title: label, key: value, width: 120 })),
-  { title: '核卡奖励（元）', key: 'heka_reward_fen', width: 135, render: row => reward(row.heka_reward_fen) },
-  { title: '激活奖励（元）', key: 'jihuo_reward_fen', width: 135, render: row => reward(row.jihuo_reward_fen) },
-  { title: '首刷奖励（元）', key: 'shoushua_reward_fen', width: 135, render: row => reward(row.shoushua_reward_fen) },
-  { title: '结算规则', key: 'settlement_rule', width: 200, ellipsis: { tooltip: true } },
+  { title: '达标时间', key: 'qualified_time', width: 180, render: row => row.qualified_time ?? '—' },
   { title: '更新时间', key: 'modify_time', width: 180 },
   { title: 'ID', key: 'id', width: 90 },
 ]
@@ -164,6 +185,9 @@ onMounted(() => {
           </n-form-item-gi>
           <n-form-item-gi label="订单状态">
             <n-select v-model:value="form.order_status" clearable :options="statuses" placeholder="全部状态" />
+          </n-form-item-gi>
+          <n-form-item-gi label="是否达标">
+            <n-select v-model:value="form.is_qualified" clearable :options="[{ label: '未达标', value: '0' }, { label: '已达标', value: '1' }]" placeholder="全部" />
           </n-form-item-gi>
           <n-form-item-gi label="日期类型">
             <n-select v-model:value="form.date_field" :options="dateFields" />
@@ -193,18 +217,33 @@ onMounted(() => {
     </n-card>
     <n-card title="科启订单" class="shadow-sm rounded-5px mt-5px">
       <template #header-extra>
-        <n-button :loading="loading" @click="loadList">
-          刷新
-        </n-button>
+        <n-space>
+          <n-button :loading="exporting" :disabled="loading || exporting || listError" @click="handleExport">
+            导出列表
+          </n-button>
+          <n-button :loading="loading" @click="loadList">
+            刷新
+          </n-button>
+        </n-space>
       </template>
       <n-alert v-if="listError" type="error" class="mb-15px">
         订单列表加载失败，请刷新重试。
       </n-alert>
       <n-data-table
         remote :columns="columns" :data="rows" :row-key="rowKey" :loading="loading"
-        :pagination="pagination" :scroll-x="2455"
+        :pagination="pagination" :scroll-x="2130"
         @update:page="changePage" @update:page-size="changePageSize"
       />
     </n-card>
+    <n-modal v-model:show="showExport" preset="card" title="科启订单导出" class="w-520px">
+      <template v-if="exported">
+        <n-alert type="success" class="mb-15px">
+          已按列表查询条件导出 {{ exported.total }} 条订单，包含全部分页数据。
+        </n-alert>
+        <n-button tag="a" type="primary" :href="exported.url" :download="exported.filename" target="_blank" rel="noopener noreferrer">
+          下载 {{ exported.filename }}
+        </n-button>
+      </template>
+    </n-modal>
   </div>
 </template>
