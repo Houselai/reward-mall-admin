@@ -1,7 +1,7 @@
 import { giftMallRequest } from '../config/request'
 import type { CatalogExport } from './catalogTransfer'
 
-export type OrderDateField = 'applied_date' | 'heka_time' | 'jihuo_time' | 'shoushua_time' | 'settlement_time'
+export type OrderDateField = 'applied_date' | 'heka_time' | 'jihuo_time' | 'shoushua_time' | 'settlement_time' | 'qualified_time'
 
 export interface KeqiOrderFilters {
   order_sn?: string
@@ -28,7 +28,6 @@ export interface KeqiOrder extends Record<OrderDateField, string | null> {
   applicant_mobile: string | null
   applicant_id_card_last4: string | null
   is_qualified: '0' | '1'
-  qualified_time: string | null
   modify_time: string
 }
 

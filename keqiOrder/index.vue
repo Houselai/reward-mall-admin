@@ -7,12 +7,16 @@ import type { KeqiOrder, KeqiOrderFilters, OrderDateField } from '../api/keqiOrd
 import type { CatalogExport } from '../api/catalogTransfer'
 
 const message = useMessage()
-const dateFields: { label: string; value: OrderDateField }[] = [
+const dateFields = [
   { label: '申请日期', value: 'applied_date' },
   { label: '核卡日期', value: 'heka_time' },
   { label: '激活日期', value: 'jihuo_time' },
   { label: '首刷日期', value: 'shoushua_time' },
   { label: '结算日期', value: 'settlement_time' },
+] as const
+const dateFilterOptions: { label: string; value: OrderDateField }[] = [
+  ...dateFields,
+  { label: '达标时间', value: 'qualified_time' },
 ]
 const textFields = [
   { label: '订单号', key: 'order_sn', max: 64 },
@@ -27,7 +31,7 @@ function initialForm() {
     order_sn: '', product_name: '', applicant_name: '', mobile_last4: '', applicant_id_card_last4: '',
     product_id: null as number | null, order_status: null as string | null,
     is_qualified: null as KeqiOrderFilters['is_qualified'] | null,
-    date_field: dateFields[0].value, date_from: null as string | null, date_to: null as string | null,
+    date_field: dateFilterOptions[0].value, date_from: null as string | null, date_to: null as string | null,
   }
 }
 
@@ -190,7 +194,7 @@ onMounted(() => {
             <n-select v-model:value="form.is_qualified" clearable :options="[{ label: '未达标', value: '0' }, { label: '已达标', value: '1' }]" placeholder="全部" />
           </n-form-item-gi>
           <n-form-item-gi label="日期类型">
-            <n-select v-model:value="form.date_field" :options="dateFields" />
+            <n-select v-model:value="form.date_field" :options="dateFilterOptions" />
           </n-form-item-gi>
           <n-form-item-gi label="开始日期">
             <n-date-picker v-model:formatted-value="form.date_from" type="date" value-format="yyyy-MM-dd" clearable class="w-full" />
