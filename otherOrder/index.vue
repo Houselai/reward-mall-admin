@@ -167,6 +167,7 @@ async function saveStatus() {
 const columns: DataTableColumns<OtherOrder> = [
   { title: '姓名', key: 'applicant_name', width: 120 },
   { title: '电话', key: 'applicant_mobile', width: 140 },
+  { title: '银行', key: 'bank_name', width: 160, ellipsis: { tooltip: true } },
   { title: '申请卡种', key: 'card_type', width: 240, ellipsis: { tooltip: true } },
   { title: '申请时间', key: 'applied_time', width: 180 },
   { title: '当前状态', key: 'order_status_text', width: 100 },
@@ -235,7 +236,7 @@ onMounted(() => {
       </n-alert>
       <n-data-table
         remote :columns="columns" :data="rows" :row-key="rowKey" :loading="loading"
-        :pagination="pagination" :scroll-x="1070"
+        :pagination="pagination" :scroll-x="1230"
         @update:page="changePage" @update:page-size="changePageSize"
       />
     </n-card>
@@ -247,6 +248,9 @@ onMounted(() => {
           </n-descriptions-item>
           <n-descriptions-item label="电话">
             {{ editing.applicant_mobile }}
+          </n-descriptions-item>
+          <n-descriptions-item label="银行">
+            {{ editing.bank_name }}
           </n-descriptions-item>
           <n-descriptions-item label="申请卡种">
             {{ editing.card_type }}

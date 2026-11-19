@@ -89,10 +89,11 @@ async function handleImport() {
     <template #default>
       <n-alert type="info" class="mb-15px">
         可使用“导出列表”获取模板。仅支持单工作表 XLSX，最大 10 MiB、10000 行。
-        五列均必填：姓名、电话、申请卡种、申请时间、当前状态。电话格式如 132****1234；申请时间支持 Excel 日期或 YYYY-MM-DD、YYYY-MM-DD HH:mm:ss 文本。
+        表头必须包含姓名、电话、申请卡种、申请时间、当前状态、银行六列。每行仅银行可留空。
+        电话格式如 132****1234。申请时间支持 Excel 日期或 YYYY-MM-DD、YYYY-MM-DD HH:mm:ss 文本。
         状态仅支持待确认、已核卡、已激活、已首刷、已达标。
         <div class="mt-10px">
-          按“姓名＋电话＋申请卡种”匹配：不存在则新增，已存在则覆盖申请时间及状态，包括人工修改的状态。文件内重复记录或任一行校验失败，整份不保存。
+          按“姓名＋电话＋申请卡种”匹配订单。未匹配到的订单会新增，匹配到的订单会覆盖银行、申请时间和状态，包括人工修改的状态。银行留空会清除原值。文件内重复记录或任一行校验失败，整份不保存。
         </div>
       </n-alert>
       <input ref="fileInput" type="file" accept=".xlsx" :disabled="importing" class="mb-15px" @change="selectFile">

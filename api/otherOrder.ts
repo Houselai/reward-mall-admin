@@ -17,6 +17,7 @@ export interface OtherOrder {
   id: number
   applicant_name: string
   applicant_mobile: string
+  bank_name: string
   card_type: string
   applied_time: string
   order_status: OtherOrderStatus
