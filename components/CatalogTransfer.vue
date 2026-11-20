@@ -19,12 +19,13 @@ const result = ref<CatalogImport | null>(null)
 const exported = ref<CatalogExport | null>(null)
 const errors = ref<CatalogImportError[]>([])
 const failure = ref('')
-const columns: DataTableColumns<CatalogImportError> = [
+const columns = computed<DataTableColumns<CatalogImportError>>(() => [
+  ...(props.module === 'product' ? [{ title: '工作表', key: 'sheet', width: 90 }] : []),
   { title: 'Excel 行号', key: 'row', width: 110 },
   { title: '列名', key: 'column', width: 140 },
   { title: '字段', key: 'field', width: 140 },
   { title: '错误原因', key: 'message', minWidth: 260 },
-]
+])
 
 function openImport() {
   mode.value = 'import'
@@ -120,20 +121,24 @@ async function handleExport() {
   >
     <template v-if="mode === 'import'">
       <n-alert type="info" class="mb-15px">
-        请先使用“导出全部”获取模板，保留 {{ module }} 工作表及全部中文表头。
-        仅支持 XLSX，最大 10 MiB、10000 行。ID 留空新增，已有 ID 完整行更新，可选文本留空会清空原值；未出现的记录不删除。
+        请先使用“导出全部”获取模板，保留 {{ module === 'product' ? 'product 和 sku 两张工作表' : module + ' 工作表' }}及全部中文表头。
+        仅支持 XLSX，最大 10 MiB，合计最多 10000 行。ID 留空新增，已有 ID 完整行更新，可选文本留空会清空原值。未出现的记录会保留。
         任一行校验或写入失败，整份文件不保存。
         <div v-if="module !== 'brand'">
           请先导入一级分类，再导入二级分类，最后导入商品；商品引用的品牌也需先存在。
         </div>
         <div v-if="module === 'product'">
-          请使用最新模板，在「一级分类列表」和「二级分类列表」两个单元格内逐行配对填写，至少一对。导入会替换该商品的全部分类。
-          支持银行在小程序配置中统一维护，模板不再包含「可办银行」列，旧模板请重新导出。
+          新商品在两张表填写相同的导入关联号，已有商品按商品 ID 关联。SKU 金额以元填写，最多两位小数。
+          卡数量和补差价留空时，新增 SKU 默认取 0，已有 SKU 保留原值。填 0 可清零。
+          「一级分类列表」和「二级分类列表」按行配对填写，至少一对。导入会替换该商品的全部分类。
         </div>
       </n-alert>
       <input ref="fileInput" type="file" accept=".xlsx" :disabled="importing" class="mb-15px" @change="selectFile">
       <n-alert v-if="result" type="success" class="mb-15px">
-        导入成功：共 {{ result.total }} 行，新增 {{ result.created }} 行，更新 {{ result.updated }} 行，未变化 {{ result.unchanged }} 行。
+        {{ label }}共 {{ result.total }} 条，新增 {{ result.created }} 条，更新 {{ result.updated }} 条，未变化 {{ result.unchanged }} 条。
+        <div v-if="result.sku_stats">
+          SKU 共 {{ result.sku_stats.total }} 条，新增 {{ result.sku_stats.created }} 条，更新 {{ result.sku_stats.updated }} 条，未变化 {{ result.sku_stats.unchanged }} 条。
+        </div>
       </n-alert>
       <n-alert v-if="failure" type="error" class="mb-15px">
         {{ failure }}
@@ -150,7 +155,7 @@ async function handleExport() {
     </template>
     <template v-else-if="exported">
       <n-alert type="success" class="mb-15px">
-        已导出全部 {{ exported.total }} 条未删除{{ label }}，包含启用和禁用数据，不受列表筛选及分页影响。
+        已导出全部 {{ exported.total }} 条未删除{{ label }}<template v-if="exported.sku_total !== undefined">，共 {{ exported.sku_total }} 个 SKU</template>，包含启用和禁用数据，不受列表筛选及分页影响。
       </n-alert>
       <n-button tag="a" type="primary" :href="exported.url" :download="exported.filename" target="_blank" rel="noopener noreferrer">
         下载 {{ exported.filename }}

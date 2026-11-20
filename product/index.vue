@@ -2,16 +2,17 @@
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
-import { autoSortProducts, createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct, uploadProductImage } from '../api/product'
-import type { Product, ProductCreate, ProductForm, ProductOption, ProductEnumOption, ProductQuery } from '../api/product'
+import { createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct } from '../api/product'
+import type { Product, ProductDetail, ProductForm, ProductListItem, ProductOption, ProductEnumOption, ProductQuery, ProductUpdate } from '../api/product'
 import CatalogTransfer from '../components/CatalogTransfer.vue'
+import ProductImages from './ProductImages.vue'
+import SkuEditor from './SkuEditor.vue'
 
 const message = useMessage()
 const dialog = useDialog()
-const rows = ref<Product[]>([])
+const rows = ref<ProductListItem[]>([])
 const rowKey = (row: Product) => row.id
 const loading = ref(false)
-const sorting = ref(false)
 const listError = ref(false)
 const query = reactive<{ title: string; category_id: number | null; brand_id: number | null; status: '0' | '1' | null }>({ title: '', category_id: null, brand_id: null, status: null })
 const pagination = reactive({ page: 1, pageSize: 10, itemCount: 0, showSizePicker: true, pageSizes: [10, 20, 50, 100] })
@@ -99,17 +100,18 @@ const modalTitle = computed(() => ({ create: '新增商品', edit: '编辑商品
 const readonly = computed(() => mode.value === 'detail')
 const saving = ref(false)
 const uploading = ref(false)
-const imageInput = ref<HTMLInputElement | null>(null)
+const calculating = ref(false)
+const tab = ref<'product' | 'skus'>('product')
+const skuEditor = ref<InstanceType<typeof SkuEditor> | null>(null)
 const detailLoadingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const formRef = ref<FormInst | null>(null)
-const editId = ref<number | null>(null)
-const detail = ref<Product | null>(null)
+const detail = ref<ProductDetail | null>(null)
 function emptyForm(): ProductForm {
-  return { images: [''], title: '', introduction: '', card_count: 1, exchange_description: '', exchange_rules: '', category_ids: [], brand_id: null, sort: 0, status: '1', remark: '' }
+  return { images: [], title: '', introduction: '', exchange_rules: '', category_ids: [], brand_id: null, status: '1', remark: '' }
 }
 const form = reactive<ProductForm>(emptyForm())
-const busy = computed(() => saving.value || uploading.value)
+const busy = computed(() => saving.value || uploading.value || calculating.value)
 function referenceOptions(options: ProductOption[], value: number | null) {
   return value !== null && !options.some(item => item.value === value)
     ? [...options, { value, label: `ID：${value}（当前不可选）`, disabled: true }]
@@ -123,15 +125,10 @@ function unavailableCategory(value: number | string) {
   const category = detail.value?.categories.find(item => item.id === value)
   return { value, label: `${category ? categoryLabel(category) : value}（当前不可选）` }
 }
-const uintRule = { required: true, type: 'number' as const, validator: (_rule: unknown, value: number) => Number.isInteger(value) && value >= 0 && value <= 4294967295, message: '请输入0至4294967295之间的整数', trigger: ['change', 'blur'] }
 const rules: FormRules = {
   title: { required: true, whitespace: true, max: 100, message: '请输入商品标题，最多100字', trigger: ['input', 'blur'] },
   introduction: { required: true, whitespace: true, max: 500, message: '请输入商品介绍，最多500字', trigger: ['input', 'blur'] },
-  images: { validator: (_rule, value: string[]) => value.length > 0 && value.every(item => !!item.trim() && item.length <= 512), message: '至少填写一张图片，每项非空且最多512字', trigger: 'change' },
-  sort: uintRule,
-  card_count: uintRule,
   exchange_rules: { required: true, whitespace: true, max: 10000, message: '请输入兑换规则，最多10000字', trigger: ['input', 'blur'] },
-  exchange_description: { max: 12, message: '兑换描述最多12个字符', trigger: ['input', 'blur'] },
   remark: { max: 128, message: '备注最多128字', trigger: ['input', 'blur'] },
   category_ids: {
     validator: (_rule, ids: number[]) => ids.length > 0 && new Set(ids).size === ids.length && ids.every(id => categoryOptions.value.some(option => option.value === id)),
@@ -145,8 +142,8 @@ const rules: FormRules = {
 async function openCreate() {
   if (optionsLoading.value || detailLoadingId.value !== null || !await loadOptions())
     return
+  tab.value = 'product'
   mode.value = 'create'
-  editId.value = null
   detail.value = null
   Object.assign(form, emptyForm())
   formRef.value?.restoreValidation()
@@ -163,16 +160,13 @@ async function openProduct(row: Product, targetMode: 'edit' | 'detail') {
       return
     if (targetMode === 'edit' && !await loadOptions())
       return
+    tab.value = 'product'
     mode.value = targetMode
-    editId.value = data.id
     detail.value = data
     Object.assign(form, {
       images: [...data.images], title: data.title, introduction: data.introduction,
-      // 接口可能返回数字字符串，数字输入框要求 number。
-      card_count: Number(data.card_count),
-      exchange_description: data.exchange_description,
       exchange_rules: data.exchange_rules, category_ids: data.categories.map(category => category.id),
-      brand_id: data.brand_id, sort: Number(data.sort), status: data.status, remark: data.remark,
+      brand_id: data.brand_id, status: data.status, remark: data.remark,
     })
     formRef.value?.restoreValidation()
     showModal.value = true
@@ -183,26 +177,46 @@ async function openProduct(row: Product, targetMode: 'edit' | 'detail') {
 }
 
 async function saveProduct() {
-  if (saving.value || uploading.value)
+  if (busy.value || !skuEditor.value)
     return
   try {
     await formRef.value?.validate()
   }
   catch {
+    tab.value = 'product'
+    return
+  }
+  let skuData
+  try {
+    skuData = skuEditor.value.getData()
+  }
+  catch (error) {
+    tab.value = 'skus'
+    message.error(error instanceof Error ? error.message : '请检查 SKU 配置')
     return
   }
   if (busy.value)
     return
   saving.value = true
   try {
-    const params: ProductCreate = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()), category_ids: [...form.category_ids], brand_id: form.brand_id! }
-    const patch: Partial<ProductCreate> & { id: number } = { ...params, id: editId.value! }
-    const previousIds = new Set(detail.value?.categories.map(category => category.id))
-    if (previousIds.size === params.category_ids.length && params.category_ids.every(id => previousIds.has(id)))
-      delete patch.category_ids
-    if (params.brand_id === detail.value?.brand_id) delete patch.brand_id
-    if (params.status === detail.value?.status) delete patch.status
-    const res = mode.value === 'create' ? await createProduct(params) : await updateProduct(patch)
+    const params = { ...form, title: form.title.trim(), images: form.images.map(item => item.trim()).filter(Boolean), category_ids: [...form.category_ids], brand_id: form.brand_id! }
+    let res
+    if (detail.value) {
+      const patch: ProductUpdate = { ...params, id: detail.value.id }
+      const previousIds = new Set(detail.value.categories.map(category => category.id))
+      if (previousIds.size === params.category_ids.length && params.category_ids.every(id => previousIds.has(id)))
+        delete patch.category_ids
+      if (params.brand_id === detail.value.brand_id) delete patch.brand_id
+      if (params.status === detail.value.status) delete patch.status
+      if (JSON.stringify(skuData.specs) !== JSON.stringify(detail.value.specs))
+        patch.specs = skuData.specs
+      if (skuData.changes.length)
+        patch.skus = skuData.changes
+      res = await updateProduct(patch)
+    }
+    else {
+      res = await createProduct({ ...params, specs: skuData.specs, skus: skuData.skus })
+    }
     if (res.error)
       return
     message.success(mode.value === 'create' ? '新增成功' : '保存成功')
@@ -212,30 +226,6 @@ async function saveProduct() {
   finally {
     saving.value = false
   }
-}
-
-function confirmAutoSort() {
-  dialog.warning({
-    title: '一键重排商品',
-    content: '将对全部未删除商品按兑换描述中的卡数、差价升序排列，未匹配的商品排在末尾。确定重排吗？',
-    positiveText: '重排',
-    negativeText: '取消',
-    onPositiveClick: async () => {
-      if (sorting.value)
-        return false
-      sorting.value = true
-      try {
-        const { error, data } = await autoSortProducts()
-        if (error || !data)
-          return false
-        message.success(`重排完成：匹配 ${data.matched_count} 件，未匹配 ${data.unmatched_count} 件，排序已更新 ${data.updated_count} 件`)
-        await loadList()
-      }
-      finally {
-        sorting.value = false
-      }
-    },
-  })
 }
 
 function confirmDelete(row: Product) {
@@ -260,60 +250,22 @@ function confirmDelete(row: Product) {
   })
 }
 
-async function uploadImages(event: Event) {
-  const input = event.target as HTMLInputElement
-  const files = Array.from(input.files ?? [])
-  input.value = ''
-  if (!files.length || busy.value || readonly.value)
-    return
-
-  uploading.value = true
-  let uploaded = 0
-  try {
-    for (const file of files) {
-      try {
-        const { error, data } = await uploadProductImage(file)
-        if (error || !data)
-          continue
-        const emptyIndex = form.images.findIndex(item => !item.trim())
-        if (emptyIndex >= 0)
-          form.images[emptyIndex] = data.url
-        else
-          form.images.push(data.url)
-        uploaded++
-      }
-      catch {
-        continue
-      }
-    }
-    if (uploaded === files.length)
-      message.success('上传成功')
-    else
-      message.error(`已上传 ${uploaded} 张，${files.length - uploaded} 张上传失败`)
-  }
-  finally {
-    uploading.value = false
-  }
-}
-
 function closeModal() {
-  if (!saving.value && !uploading.value)
+  if (!busy.value)
     showModal.value = false
 }
 
-function moveImage(index: number, offset: number) {
-  const target = index + offset
-  if (busy.value || readonly.value || target < 0 || target >= form.images.length) return
-  const [image] = form.images.splice(index, 1)
-  form.images.splice(target, 0, image)
-}
-const columns: DataTableColumns<Product> = [
+const columns: DataTableColumns<ProductListItem> = [
   { title: 'ID', key: 'id', width: 80 },
   { title: '商品标题', key: 'title', width: 220 },
-  { title: '首图', key: 'images', width: 100, render: row => /^https?:\/\//i.test(row.images[0]) ? h(NImage, { src: row.images[0], width: 60, height: 60, objectFit: 'contain' }) : row.images[0] },
+  { title: '首图', key: 'images', width: 100, render: (row) => {
+    const image = row.main_sku?.images[0] || row.images[0]
+    return image && /^https?:\/\//i.test(image) ? h(NImage, { src: image, width: 60, height: 60, objectFit: 'contain' }) : image || '—'
+  } },
   { title: '分类', key: 'categories', width: 200, render: row => row.categories.map(categoryLabel).join('、') || '—' },
   { title: '品牌', key: 'brand_name', width: 150 },
-  { title: '排序', key: 'sort', width: 90 },
+  { title: 'SKU（上架 / 总数）', key: 'sku_count', width: 145, render: row => `${row.on_sku_count} / ${row.sku_count}` },
+  { title: '主推规格', key: 'main_sku', width: 180, render: row => row.main_sku ? row.main_sku.spec_text || '默认规格' : '—' },
   { title: '状态', key: 'status', width: 90, render: row => h(NTag, { type: row.status === '1' ? 'success' : 'default' }, { default: () => row.status === '1' ? '启用' : '禁用' }) },
   { title: '修改时间', key: 'modify_time', width: 180 },
   { title: '操作', key: 'actions', width: 200, fixed: 'right', render: row => h(NSpace, {}, { default: () => [
@@ -363,9 +315,6 @@ onMounted(() => { loadOptions(); loadList() })
       <template #header-extra>
         <n-space>
           <CatalogTransfer module="product" @imported="loadList" />
-          <n-button :loading="sorting" @click="confirmAutoSort">
-            一键重排商品
-          </n-button>
           <n-button :loading="loading" @click="loadList">
             刷新
           </n-button>
@@ -379,93 +328,66 @@ onMounted(() => { loadOptions(); loadList() })
       </n-alert>
       <n-data-table
         remote :columns="columns" :data="rows" :loading="loading" :pagination="pagination"
-        :row-key="rowKey" :scroll-x="1430"
+        :row-key="rowKey" :scroll-x="1550"
         @update:page="changePage" @update:page-size="changePageSize"
       />
     </n-card>
     <n-modal
       :show="showModal" preset="card" :title="modalTitle" class="w-900px max-w-95vw"
-      :mask-closable="false" :close-on-esc="!saving && !uploading" :closable="!saving && !uploading"
+      :mask-closable="false" :close-on-esc="!busy" :closable="!busy"
       @update:show="closeModal"
     >
-      <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="100" :disabled="readonly || busy">
-        <n-form-item label="商品标题" path="title">
-          <n-input v-model:value="form.title" :maxlength="100" show-count />
-        </n-form-item>
-        <n-form-item label="商品介绍" path="introduction">
-          <n-input v-model:value="form.introduction" type="textarea" :maxlength="500" show-count />
-        </n-form-item>
-        <n-form-item label="商品图片" path="images">
-          <div class="w-full">
-            <div v-for="(image, index) in form.images" :key="index" class="mb-10px">
-              <n-input v-model:value="form.images[index]" :maxlength="512" placeholder="图片 URL 或 OSS key" />
-              <n-image v-if="/^https?:\/\//i.test(image)" :src="image" :width="80" class="mt-5px" />
-              <n-space v-if="!readonly" class="mt-5px">
-                <n-button :disabled="busy || index === 0" @click="moveImage(index, -1)">
-                  上移
-                </n-button>
-                <n-button :disabled="busy || index === form.images.length - 1" @click="moveImage(index, 1)">
-                  下移
-                </n-button>
-                <n-button :disabled="busy" type="error" @click="form.images.splice(index, 1)">
-                  移除
-                </n-button>
-              </n-space>
-            </div>
-            <n-space v-if="!readonly">
-              <n-button :disabled="busy" @click="form.images.push('')">
-                添加图片地址
-              </n-button>
-              <input ref="imageInput" type="file" accept="image/*" multiple hidden @change="uploadImages">
-              <n-button :loading="uploading" :disabled="busy" @click="imageInput?.click()">
-                上传图片
-              </n-button>
-            </n-space>
-          </div>
-        </n-form-item>
-        <n-form-item label="卡数量" path="card_count">
-          <n-input-number v-model:value="form.card_count" :min="0" :max="4294967295" :precision="0" />
-        </n-form-item>
-        <n-form-item label="兑换描述" path="exchange_description">
-          <n-input v-model:value="form.exchange_description" :maxlength="12" show-count />
-        </n-form-item>
-        <n-form-item label="二级分类" path="category_ids" required>
-          <span v-if="readonly">{{ detail?.categories.map(categoryLabel).join('、') || '—' }}</span>
-          <n-select v-else v-model:value="form.category_ids" :options="categoryOptions" :fallback-option="unavailableCategory" multiple filterable placeholder="请选择一个或多个二级分类" />
-        </n-form-item>
-        <n-form-item label="品牌" path="brand_id" required>
-          <n-select v-model:value="form.brand_id" :options="editBrands" filterable placeholder="请选择启用品牌" />
-        </n-form-item>
-        <n-form-item label="兑换规则" path="exchange_rules">
-          <n-input v-model:value="form.exchange_rules" type="textarea" :maxlength="10000" show-count placeholder="纯文本规则，支持换行" />
-        </n-form-item>
-        <n-form-item label="排序" path="sort">
-          <n-input-number v-model:value="form.sort" :min="0" :max="4294967295" :precision="0" />
-        </n-form-item>
-        <n-form-item label="状态" path="status">
-          <n-select v-model:value="form.status" :options="enumOptions.status" />
-        </n-form-item>
-        <n-form-item label="备注" path="remark">
-          <n-input v-model:value="form.remark" type="textarea" :maxlength="128" show-count />
-        </n-form-item>
-        <template v-if="readonly && detail">
-          <n-form-item label="ID">
-            {{ detail.id }}
-          </n-form-item>
-          <n-form-item label="创建时间">
-            {{ detail.create_time }}
-          </n-form-item>
-          <n-form-item label="修改时间">
-            {{ detail.modify_time }}
-          </n-form-item>
-        </template>
-      </n-form>
+      <n-tabs v-if="showModal" v-model:value="tab" type="line">
+        <n-tab-pane name="product" tab="商品信息" display-directive="show" :disabled="busy">
+          <n-form ref="formRef" :model="form" :rules="rules" label-placement="left" :label-width="100" :disabled="readonly || busy">
+            <n-form-item label="商品标题" path="title">
+              <n-input v-model:value="form.title" :maxlength="100" show-count />
+            </n-form-item>
+            <n-form-item label="商品介绍" path="introduction">
+              <n-input v-model:value="form.introduction" type="textarea" :maxlength="500" show-count />
+            </n-form-item>
+            <n-form-item label="商品图片">
+              <ProductImages v-model:value="form.images" :readonly="readonly" :disabled="busy" empty-text="暂无商品图片" @uploading="value => uploading = value" />
+            </n-form-item>
+            <n-form-item label="二级分类" path="category_ids" required>
+              <span v-if="readonly">{{ detail?.categories.map(categoryLabel).join('、') || '—' }}</span>
+              <n-select v-else v-model:value="form.category_ids" :options="categoryOptions" :fallback-option="unavailableCategory" multiple filterable placeholder="请选择一个或多个二级分类" />
+            </n-form-item>
+            <n-form-item label="品牌" path="brand_id" required>
+              <n-select v-model:value="form.brand_id" :options="editBrands" filterable placeholder="请选择启用品牌" />
+            </n-form-item>
+            <n-form-item label="兑换规则" path="exchange_rules">
+              <n-input v-model:value="form.exchange_rules" type="textarea" :maxlength="10000" show-count placeholder="纯文本规则，支持换行" />
+            </n-form-item>
+            <n-form-item label="状态" path="status">
+              <n-select v-model:value="form.status" :options="enumOptions.status" />
+            </n-form-item>
+            <n-form-item label="备注" path="remark">
+              <n-input v-model:value="form.remark" type="textarea" :maxlength="128" show-count />
+            </n-form-item>
+            <template v-if="readonly && detail">
+              <n-form-item label="ID">
+                {{ detail.id }}
+              </n-form-item>
+              <n-form-item label="创建时间">
+                {{ detail.create_time }}
+              </n-form-item>
+              <n-form-item label="修改时间">
+                {{ detail.modify_time }}
+              </n-form-item>
+            </template>
+          </n-form>
+        </n-tab-pane>
+        <n-tab-pane name="skus" tab="规格与 SKU" display-directive="show" :disabled="busy">
+          <SkuEditor ref="skuEditor" @calculating="value => calculating = value" :product="detail" :readonly="readonly" :disabled="busy" @uploading="value => uploading = value" />
+        </n-tab-pane>
+      </n-tabs>
       <template #footer>
         <n-space justify="end">
-          <n-button :disabled="saving || uploading" @click="closeModal">
+          <n-button :disabled="busy" @click="closeModal">
             {{ readonly ? '关闭' : '取消' }}
           </n-button>
-          <n-button v-if="!readonly" type="primary" :loading="saving" :disabled="uploading" @click="saveProduct">
+          <n-button v-if="!readonly" type="primary" :loading="saving" :disabled="busy" @click="saveProduct">
             保存
           </n-button>
         </n-space>

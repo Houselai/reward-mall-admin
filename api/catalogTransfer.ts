@@ -8,16 +8,22 @@ export interface CatalogExport {
   url: string
   filename: string
   total: number
+  sku_total?: number
 }
 
-export interface CatalogImport {
+interface ImportStats {
   total: number
   created: number
   updated: number
   unchanged: number
 }
 
+export interface CatalogImport extends ImportStats {
+  sku_stats?: ImportStats
+}
+
 export interface CatalogImportError {
+  sheet?: string
   row: number
   field: string
   column: string

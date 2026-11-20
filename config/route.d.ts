@@ -9,5 +9,6 @@ declare namespace GiftMallRoute {
     | 'giftMall_homeCategory' // 首页栏目配置
     | 'giftMall_keqiOrder' // 科启订单
     | 'giftMall_otherOrder'
+    | 'giftMall_exchangeRule' // 供应链价兑换规则
     | 'giftMall_product' // 商品管理
 }

@@ -36,6 +36,15 @@ export const giftMallRoute: AuthRoute.Route = {
       },
     },
     {
+      name: 'giftMall_exchangeRule',
+      path: '/giftMall/exchangeRule',
+      component: 'self',
+      meta: {
+        title: '供应链价兑换规则',
+        icon: 'mdi:calculator',
+      },
+    },
+    {
       name: 'giftMall_keqiOrder',
       path: '/giftMall/keqiOrder',
       component: 'self',
