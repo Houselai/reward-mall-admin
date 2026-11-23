@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, h, onMounted, reactive, ref } from 'vue'
-import { NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
+import { NA, NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
 import { createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct } from '../api/product'
 import type { Product, ProductDetail, ProductForm, ProductListItem, ProductOption, ProductEnumOption, ProductQuery, ProductUpdate } from '../api/product'
@@ -255,8 +255,13 @@ function closeModal() {
     showModal.value = false
 }
 
+const productH5Origin = import.meta.env.VITE_SERVICE_ENV === 'prod' ? 'https://xyk.yiika.site' : 'https://xyk.llnovel.com'
+function productLinkAttrs(id: number) {
+  return { href: `${productH5Origin}/#/pages/detail/index?id=${id}`, target: '_blank', rel: 'noopener noreferrer' }
+}
+
 const columns: DataTableColumns<ProductListItem> = [
-  { title: 'ID', key: 'id', width: 80 },
+  { title: 'ID', key: 'id', width: 80, render: row => h(NA, productLinkAttrs(row.id), { default: () => row.id }) },
   { title: '商品标题', key: 'title', width: 220 },
   { title: '首图', key: 'images', width: 100, render: (row) => {
     const image = row.main_sku?.images[0] || row.images[0]
@@ -367,7 +372,9 @@ onMounted(() => { loadOptions(); loadList() })
             </n-form-item>
             <template v-if="readonly && detail">
               <n-form-item label="ID">
-                {{ detail.id }}
+                <n-a v-bind="productLinkAttrs(detail.id)">
+                  {{ detail.id }}
+                </n-a>
               </n-form-item>
               <n-form-item label="创建时间">
                 {{ detail.create_time }}
