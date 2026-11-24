@@ -24,6 +24,10 @@ export interface AppletConfigSaveItem {
 
 const jsonConfig = { headers: { 'Content-Type': 'application/json' } }
 
+export function fetchPublicAppletConfig() {
+  return giftMallRequest.post<{ default_exchange_rules: string }>('/applet/config/show.json', {}, jsonConfig)
+}
+
 export function fetchAppletConfigs() {
   return giftMallRequest.post<{ list: AppletConfig[] }>('/admin/applet_config/list.json', {}, jsonConfig)
 }

@@ -2,6 +2,7 @@
 import { computed, h, onMounted, reactive, ref } from 'vue'
 import { NA, NButton, NImage, NSpace, NTag, useDialog, useMessage } from 'naive-ui'
 import type { DataTableColumns, FormInst, FormRules } from 'naive-ui'
+import { fetchPublicAppletConfig } from '../api/appletConfig'
 import { createProduct, deleteProduct, fetchProductDetail, fetchProductList, fetchProductBrands, fetchProductCategories, fetchProductEnums, updateProduct } from '../api/product'
 import type { Product, ProductDetail, ProductForm, ProductListItem, ProductOption, ProductEnumOption, ProductQuery, ProductUpdate } from '../api/product'
 import CatalogTransfer from '../components/CatalogTransfer.vue'
@@ -22,11 +23,14 @@ const enumOptions = reactive<{ status: ProductEnumOption[] }>({ status: [] })
 const optionsLoading = ref(false)
 const optionsError = ref(false)
 let activeQuery: Omit<ProductQuery, 'page' | 'step'> = {}
-async function loadOptions() {
+async function loadOptions(forCreate = false) {
   optionsLoading.value = true
   optionsError.value = false
   try {
-    const [brands, categories, enums] = await Promise.all([fetchProductBrands(), fetchProductCategories(), fetchProductEnums()])
+    const [brands, categories, enums, config] = await Promise.all([
+      fetchProductBrands(), fetchProductCategories(), fetchProductEnums(),
+      forCreate ? fetchPublicAppletConfig() : undefined,
+    ])
     if (brands.error || categories.error || enums.error || !brands.data || !categories.data || !enums.data) {
       optionsError.value = true
       return false
@@ -34,7 +38,7 @@ async function loadOptions() {
     brandOptions.value = brands.data.list
     categoryOptions.value = categories.data.list.flatMap(parent => parent.children.map(child => ({ value: child.value, label: `${parent.label} / ${child.label}` })))
     Object.assign(enumOptions, enums.data)
-    return true
+    return { defaultExchangeRules: config?.data?.default_exchange_rules ?? '' }
   }
   finally {
     optionsLoading.value = false
@@ -107,8 +111,8 @@ const detailLoadingId = ref<number | null>(null)
 const deletingId = ref<number | null>(null)
 const formRef = ref<FormInst | null>(null)
 const detail = ref<ProductDetail | null>(null)
-function emptyForm(): ProductForm {
-  return { images: [], title: '', introduction: '', exchange_rules: '', category_ids: [], brand_id: null, status: '1', remark: '' }
+function emptyForm(exchangeRules = ''): ProductForm {
+  return { images: [], title: '', introduction: '', exchange_rules: exchangeRules, category_ids: [], brand_id: null, status: '1', remark: '' }
 }
 const form = reactive<ProductForm>(emptyForm())
 const busy = computed(() => saving.value || uploading.value || calculating.value)
@@ -140,12 +144,15 @@ const rules: FormRules = {
 }
 
 async function openCreate() {
-  if (optionsLoading.value || detailLoadingId.value !== null || !await loadOptions())
+  if (optionsLoading.value || detailLoadingId.value !== null)
+    return
+  const options = await loadOptions(true)
+  if (!options)
     return
   tab.value = 'product'
   mode.value = 'create'
   detail.value = null
-  Object.assign(form, emptyForm())
+  Object.assign(form, emptyForm(options.defaultExchangeRules))
   formRef.value?.restoreValidation()
   showModal.value = true
 }
@@ -311,7 +318,7 @@ onMounted(() => { loadOptions(); loadList() })
       </n-form>
       <n-alert v-if="optionsError" type="error">
         选项加载失败。
-        <n-button text type="primary" :loading="optionsLoading" @click="loadOptions">
+        <n-button text type="primary" :loading="optionsLoading" @click="loadOptions()">
           重试
         </n-button>
       </n-alert>

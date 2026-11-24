@@ -179,7 +179,11 @@ loadConfigs()
             </div>
 
             <div class="config-editor">
-              <n-input v-if="item.type === 'string'" v-model:value="item.value" :input-props="{ 'aria-label': item.name }" placeholder="请输入配置内容，可留空" />
+              <n-input
+                v-if="item.type === 'string'" v-model:value="item.value"
+                :type="item.key === 'default_exchange_rules' ? 'textarea' : 'text'" :rows="8"
+                :input-props="{ 'aria-label': item.name }" placeholder="请输入配置内容，可留空"
+              />
               <div v-else-if="item.type === 'pic'" class="config-picture">
                 <div class="config-picture-preview">
                   <n-image v-if="item.value" :src="item.value" :alt="item.name" :width="120" :height="120" object-fit="contain" />
@@ -379,6 +383,7 @@ loadConfigs()
   line-height: 1.7;
   color: var(--config-muted);
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .config-default-label {
